@@ -140,6 +140,10 @@ func Build(confs []*config.Receiver, tmpl *template.Template) map[string]Fanout 
 			n := NewPushover(c, tmpl)
 			add(i, n, filter(n, c))
 		}
+		for i, c := range nc.NexmoConfigs {
+			n := NewNexmo(c, tmpl)
+			add(i, n, filter(n, c))
+		}
 
 		res[nc.Name] = fo
 	}
@@ -787,6 +791,80 @@ func (n *Pushover) Notify(ctx context.Context, as ...*types.Alert) error {
 		}
 		return fmt.Errorf("unexpected status code %v (body: %s)", resp.StatusCode, string(body))
 	}
+	return nil
+}
+
+// Nexmo implements a Notifier for Nexmo notifications.
+type Nexmo struct {
+	conf *config.NexmoConfig
+	tmpl *template.Template
+}
+
+// NewNexmo returns a new Nexmo notification handler.
+func NewNexmo(conf *config.NexmoConfig, tmpl *template.Template) *Nexmo {
+	return &Nexmo{
+		conf: conf,
+		tmpl: tmpl,
+	}
+}
+
+func (*Nexmo) name() string { return "nexmo" }
+
+// nexmoResponse is the response of an sms sending
+type nexmoResponse struct {
+	MessageCount string `json:"message-count"`
+	Messages     []struct {
+		ErrorText string `json:"error-text"`
+	}
+}
+
+// Notify implements the Notifier interface.
+func (n *Nexmo) Notify(ctx context.Context, as ...*types.Alert) error {
+
+	var err error
+	var (
+		data = n.tmpl.Data(receiver(ctx), groupLabels(ctx), as...)
+		tmpl = tmplText(n.tmpl, data, &err)
+	)
+	if err != nil {
+		return err
+	}
+
+	parameters := url.Values{}
+	parameters.Add("api_key", n.conf.APIKey)
+	parameters.Add("api_secret", string(n.conf.APISecret))
+	parameters.Add("from", tmpl(n.conf.From))
+	parameters.Add("to", n.conf.To)
+	parameters.Add("text", tmpl(n.conf.Text))
+
+	var buf bytes.Buffer
+
+	buf.WriteString(parameters.Encode())
+
+	resp, err := ctxhttp.Post(ctx, http.DefaultClient, "https://rest.nexmo.com/sms/json", "application/x-www-form-urlencoded", &buf)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("unexpected status code %v", resp.StatusCode)
+	}
+
+	contents, _ := ioutil.ReadAll(resp.Body)
+	fmt.Println(string(contents))
+
+	nexmoResponse := nexmoResponse{}
+	if err := json.NewDecoder(resp.Body).Decode(&nexmoResponse); err != nil {
+		return err
+	}
+	if len(nexmoResponse.Messages) < 1 {
+		return fmt.Errorf("unexpected message count %v", nexmoResponse.MessageCount)
+	}
+	if nexmoResponse.Messages[0].ErrorText != "" {
+		return fmt.Errorf("unexpected message error text %v", nexmoResponse.Messages[0].ErrorText)
+	}
+
 	return nil
 }
 

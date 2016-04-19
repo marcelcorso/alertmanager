@@ -104,6 +104,15 @@ var (
 		Retry:    duration(1 * time.Minute),
 		Expire:   duration(1 * time.Hour),
 	}
+
+	// DefaultNexmoConfig defines default values for Nexmo configurations.
+	DefaultNexmoConfig = NexmoConfig{
+		NotifierConfig: NotifierConfig{
+			VSendResolved: true,
+		},
+		From: `{{ template "nexmo.default.from" . }}`,
+		Text: `{{ template "nexmo.default.text" . }}`,
+	}
 )
 
 // NotifierConfig contains base options common across all notifier configurations.
@@ -346,4 +355,30 @@ func (c *PushoverConfig) UnmarshalYAML(unmarshal func(interface{}) error) error 
 		return fmt.Errorf("missing token in Pushover config")
 	}
 	return checkOverflow(c.XXX, "pushover config")
+}
+
+type NexmoConfig struct {
+	NotifierConfig `yaml:",inline"`
+
+	APIKey    string `yaml:"api_key"`
+	APISecret Secret `yaml:"api_secret"`
+	From      string `yaml:"from"`
+	Text      string `yaml:"text"`
+	To        string `yaml:"to"`
+
+	// Catches all undefined fields and must be empty after parsing.
+	XXX map[string]interface{} `yaml:",inline"`
+}
+
+// UnmarshalYAML implements the yaml.Unmarshaler interface.
+func (c *NexmoConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	*c = DefaultNexmoConfig
+	type plain NexmoConfig
+	if err := unmarshal((*plain)(c)); err != nil {
+		return err
+	}
+	if c.To == "" {
+		return fmt.Errorf("missing To in Nexmo config")
+	}
+	return checkOverflow(c.XXX, "Nexmo config")
 }

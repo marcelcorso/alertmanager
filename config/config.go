@@ -205,6 +205,26 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 				ogc.APIHost += "/"
 			}
 		}
+		for _, nc := range rcv.NexmoConfigs {
+			if nc.APIKey == "" {
+				if c.Global.NexmoAPIKey == "" {
+					return fmt.Errorf("no global Nexmo API Key set")
+				}
+				nc.APIKey = c.Global.NexmoAPIKey
+			}
+			if nc.APISecret == "" {
+				if c.Global.NexmoAPISecret == "" {
+					return fmt.Errorf("no global Nexmo API Secret set")
+				}
+				nc.APISecret = c.Global.NexmoAPISecret
+			}
+			if nc.From == "" {
+				if c.Global.NexmoFrom == "" {
+					return fmt.Errorf("no global Nexmo From")
+				}
+				nc.From = c.Global.NexmoFrom
+			}
+		}
 		names[rcv.Name] = struct{}{}
 	}
 
@@ -262,6 +282,9 @@ type GlobalConfig struct {
 	HipchatURL       string `yaml:"hipchat_url"`
 	HipchatAuthToken Secret `yaml:"hipchat_auth_token"`
 	OpsGenieAPIHost  string `yaml:"opsgenie_api_host"`
+	NexmoAPIKey      string `yaml:"nexmo_api_key"`
+	NexmoAPISecret   Secret `yaml:"nexmo_api_secret"`
+	NexmoFrom        string `yaml:"nexmo_from"`
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface.
@@ -390,6 +413,7 @@ type Receiver struct {
 	WebhookConfigs   []*WebhookConfig   `yaml:"webhook_configs,omitempty"`
 	OpsGenieConfigs  []*OpsGenieConfig  `yaml:"opsgenie_configs,omitempty"`
 	PushoverConfigs  []*PushoverConfig  `yaml:"pushover_configs,omitempty"`
+	NexmoConfigs     []*NexmoConfig     `yaml:"nexmo_configs,omitempty"`
 
 	// Catches all undefined fields and must be empty after parsing.
 	XXX map[string]interface{} `yaml:",inline"`
