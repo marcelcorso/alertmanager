@@ -26,7 +26,6 @@ import (
 	"net/mail"
 	"net/smtp"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -232,23 +231,23 @@ func (*Email) name() string { return "email" }
 
 // auth resolves a string of authentication mechanisms.
 func (n *Email) auth(mechs string) (smtp.Auth, error) {
-	username := os.Getenv("SMTP_AUTH_USERNAME")
+	username := n.conf.AuthUsername
 
 	for _, mech := range strings.Split(mechs, " ") {
 		switch mech {
 		case "CRAM-MD5":
-			secret := os.Getenv("SMTP_AUTH_SECRET")
+			secret := string(n.conf.AuthSecret)
 			if secret == "" {
 				continue
 			}
 			return smtp.CRAMMD5Auth(username, secret), nil
 
 		case "PLAIN":
-			password := os.Getenv("SMTP_AUTH_PASSWORD")
+			password := string(n.conf.AuthPassword)
 			if password == "" {
 				continue
 			}
-			identity := os.Getenv("SMTP_AUTH_IDENTITY")
+			identity := n.conf.AuthIdentity
 
 			// We need to know the hostname for both auth and TLS.
 			host, _, err := net.SplitHostPort(n.conf.Smarthost)
@@ -756,8 +755,12 @@ func (n *Pushover) Notify(ctx context.Context, as ...*types.Alert) error {
 	title := tmpl(n.conf.Title)
 	message := tmpl(n.conf.Message)
 	parameters.Add("title", title)
+	if len(title) > 512 {
+		title = title[:512]
+		log.With("incident", key).Debugf("Truncated title to %q due to Pushover message limit", title)
+	}
 	if len(title)+len(message) > 512 {
-		message = message[:512]
+		message = message[:512-len(title)]
 		log.With("incident", key).Debugf("Truncated message to %q due to Pushover message limit", message)
 	}
 	if message == "" {
