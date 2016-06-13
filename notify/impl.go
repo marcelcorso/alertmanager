@@ -854,9 +854,6 @@ func (n *Nexmo) Notify(ctx context.Context, as ...*types.Alert) error {
 		return fmt.Errorf("unexpected status code %v", resp.StatusCode)
 	}
 
-	contents, _ := ioutil.ReadAll(resp.Body)
-	fmt.Println(string(contents))
-
 	nexmoResponse := nexmoResponse{}
 	if err := json.NewDecoder(resp.Body).Decode(&nexmoResponse); err != nil {
 		return err
